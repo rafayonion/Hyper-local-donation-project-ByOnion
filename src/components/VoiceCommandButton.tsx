@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Mic, MicOff } from 'lucide-react';
 import { toast } from 'sonner';
+import { speak, playStartSound, playStopSound } from '@/lib/audio';
 
 // Define the interfaces for the Speech Recognition API
 interface SpeechRecognitionEvent {
@@ -47,25 +48,41 @@ export const VoiceCommandButton: React.FC = () => {
   const handleCommand = useCallback((command: string) => {
     const lowerCommand = command.toLowerCase();
 
+    // Help Command
+    if (lowerCommand.includes('help') || lowerCommand.includes('what can i say') || lowerCommand.includes('commands')) {
+        const helpText = "You can say: Go home, Go to profile, Go to messages, Go to my listings, I want to donate, I need help, or search for items like furniture or food.";
+        speak(helpText);
+        toast.info(helpText);
+        return;
+    }
+
     // General Navigation
     if (lowerCommand.includes('home') || lowerCommand.includes('go to start')) {
       navigate('/');
-      toast.success("Navigating home");
+      const msg = "Navigating home";
+      toast.success(msg);
+      speak(msg);
       return;
     }
     if (lowerCommand.includes('profile')) {
       navigate('/profile');
-      toast.success("Navigating to profile");
+      const msg = "Navigating to profile";
+      toast.success(msg);
+      speak(msg);
       return;
     }
     if (lowerCommand.includes('messages') || lowerCommand.includes('inbox')) {
       navigate('/messages');
-      toast.success("Navigating to messages");
+      const msg = "Navigating to messages";
+      toast.success(msg);
+      speak(msg);
       return;
     }
     if (lowerCommand.includes('my listings')) {
         navigate('/my-listings');
-        toast.success("Navigating to my listings");
+        const msg = "Navigating to my listings";
+        toast.success(msg);
+        speak(msg);
         return;
     }
 
@@ -75,7 +92,9 @@ export const VoiceCommandButton: React.FC = () => {
        // But distinguish from "find donations"
        if (!lowerCommand.includes('find') && !lowerCommand.includes('search') && !lowerCommand.includes('show') && !lowerCommand.includes('see')) {
            navigate('/create-listing');
-           toast.success("Opening donation form");
+           const msg = "Opening donation form";
+           toast.success(msg);
+           speak(msg);
            return;
        }
     }
@@ -84,7 +103,9 @@ export const VoiceCommandButton: React.FC = () => {
          // "I want to request", "make a request", "I need help"
          if (!lowerCommand.includes('find') && !lowerCommand.includes('search') && !lowerCommand.includes('show') && !lowerCommand.includes('see')) {
             navigate('/create-request');
-            toast.success("Opening request form");
+            const msg = "Opening request form";
+            toast.success(msg);
+            speak(msg);
             return;
          }
     }
@@ -97,7 +118,9 @@ export const VoiceCommandButton: React.FC = () => {
     // "Show me furniture requests"
     if ((lowerCommand.includes('can donate') || lowerCommand.includes('requests')) && foundCategory) {
         navigate(`/feed?tab=requests&category=${foundCategory}`);
-        toast.success(`Showing requests for ${foundCategory}`);
+        const msg = `Showing requests for ${foundCategory}`;
+        toast.success(msg);
+        speak(msg);
         return;
     }
 
@@ -105,20 +128,26 @@ export const VoiceCommandButton: React.FC = () => {
     if ((lowerCommand.includes('donations') || lowerCommand.includes('find') || lowerCommand.includes('show')) && foundCategory) {
          // Default to donations if not specified "requests"
          navigate(`/feed?tab=donations&category=${foundCategory}`);
-         toast.success(`Showing donations for ${foundCategory}`);
+         const msg = `Showing donations for ${foundCategory}`;
+         toast.success(msg);
+         speak(msg);
          return;
     }
 
     // Explicit tab navigation without category
     if (lowerCommand.includes('show requests') || lowerCommand.includes('see requests')) {
         navigate('/feed?tab=requests');
-        toast.success("Showing all requests");
+        const msg = "Showing all requests";
+        toast.success(msg);
+        speak(msg);
         return;
     }
 
     if (lowerCommand.includes('show donations') || lowerCommand.includes('see donations')) {
         navigate('/feed?tab=donations');
-        toast.success("Showing all donations");
+        const msg = "Showing all donations";
+        toast.success(msg);
+        speak(msg);
         return;
     }
 
@@ -127,12 +156,15 @@ export const VoiceCommandButton: React.FC = () => {
         const searchTerm = lowerCommand.split('search for')[1].trim();
         if (searchTerm) {
             navigate(`/feed?search=${encodeURIComponent(searchTerm)}`);
-            toast.success(`Searching for ${searchTerm}`);
+            const msg = `Searching for ${searchTerm}`;
+            toast.success(msg);
+            speak(msg);
             return;
         }
     }
 
     toast.info(`Command received: "${command}" (No action taken)`);
+    speak("I heard that, but I'm not sure what to do. Try saying 'help' for commands.");
   }, [navigate]);
 
   useEffect(() => {
@@ -146,11 +178,14 @@ export const VoiceCommandButton: React.FC = () => {
 
       recognitionInstance.onstart = () => {
         setIsListening(true);
+        playStartSound();
         toast.info("Listening...", { duration: 2000 });
       };
 
       recognitionInstance.onend = () => {
         setIsListening(false);
+        // Only play stop sound if it stopped naturally or via toggle, not if it's restarting immediately for continuous (though continuous is false here)
+        playStopSound();
       };
 
       recognitionInstance.onresult = (event: SpeechRecognitionEvent) => {
@@ -162,10 +197,15 @@ export const VoiceCommandButton: React.FC = () => {
       recognitionInstance.onerror = (event: SpeechRecognitionErrorEvent) => {
         console.error('Speech recognition error', event.error);
         setIsListening(false);
+        playStopSound(); // Ensure stop sound plays on error too
         if (event.error === 'not-allowed') {
-          toast.error("Microphone access denied.");
+          const msg = "Microphone access denied.";
+          toast.error(msg);
+          speak(msg);
         } else {
-            toast.error("Could not understand.");
+            const msg = "Could not understand.";
+            toast.error(msg);
+            speak(msg);
         }
       };
 
@@ -175,7 +215,7 @@ export const VoiceCommandButton: React.FC = () => {
     }
   }, [handleCommand]);
 
-  const toggleListening = () => {
+  const toggleListening = useCallback(() => {
     if (!recognition) {
         toast.error("Voice commands not supported in this browser.");
         return;
@@ -186,7 +226,81 @@ export const VoiceCommandButton: React.FC = () => {
     } else {
       recognition.start();
     }
-  };
+  }, [recognition, isListening]);
+
+  // Global "Hold to Speak" and "Double Tap" logic
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    let lastTapTime = 0;
+    let ignoreMouse = false; // Prevent double-firing on touch devices (touchstart + mousedown)
+
+    const holdDuration = 800; // ms
+    const doubleTapThreshold = 300; // ms
+
+    const handleStart = () => {
+        // Prevent interfering with other interactions if we are already listening
+        if (isListening) return;
+
+        // Double Tap Detection
+        const now = Date.now();
+        if (now - lastTapTime < doubleTapThreshold) {
+            if (recognition && !isListening) {
+                 recognition.start();
+                 lastTapTime = 0; // Reset
+                 // If double tap activated, we don't need to start the long press timer
+                 return;
+            }
+        }
+        lastTapTime = now;
+
+        // Start Long Press Timer
+        timer = setTimeout(() => {
+            if (recognition && !isListening) {
+                 recognition.start();
+            }
+        }, holdDuration);
+    };
+
+    const handleTouchStart = () => {
+        ignoreMouse = true;
+        handleStart();
+        // Reset ignore flag after the typical click delay (300-400ms)
+        setTimeout(() => { ignoreMouse = false; }, 600);
+    };
+
+    const handleMouseDown = () => {
+        if (ignoreMouse) return;
+        handleStart();
+    };
+
+    const clearTimer = () => {
+        if (timer) {
+            clearTimeout(timer);
+            timer = null;
+        }
+    };
+
+    // Attach listeners to window for global coverage
+    window.addEventListener('touchstart', handleTouchStart);
+    window.addEventListener('mousedown', handleMouseDown);
+
+    window.addEventListener('touchend', clearTimer);
+    window.addEventListener('mouseup', clearTimer);
+
+    // Clear on scroll/move to prevent triggering while scrolling
+    window.addEventListener('touchmove', clearTimer);
+    window.addEventListener('mousemove', clearTimer);
+
+    return () => {
+        window.removeEventListener('touchstart', handleTouchStart);
+        window.removeEventListener('mousedown', handleMouseDown);
+        window.removeEventListener('touchend', clearTimer);
+        window.removeEventListener('mouseup', clearTimer);
+        window.removeEventListener('touchmove', clearTimer);
+        window.removeEventListener('mousemove', clearTimer);
+        if (timer) clearTimeout(timer);
+    };
+  }, [recognition, isListening]);
 
   return (
     <div className="fixed bottom-20 left-6 z-50">
