@@ -228,21 +228,49 @@ export const VoiceCommandButton: React.FC = () => {
     }
   }, [recognition, isListening]);
 
-  // Global "Hold to Speak" logic
+  // Global "Hold to Speak" and "Double Tap" logic
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
-    const holdDuration = 800; // ms
+    let lastTapTime = 0;
+    let ignoreMouse = false; // Prevent double-firing on touch devices (touchstart + mousedown)
 
-    const startTimer = () => {
+    const holdDuration = 800; // ms
+    const doubleTapThreshold = 300; // ms
+
+    const handleStart = () => {
         // Prevent interfering with other interactions if we are already listening
         if (isListening) return;
 
+        // Double Tap Detection
+        const now = Date.now();
+        if (now - lastTapTime < doubleTapThreshold) {
+            if (recognition && !isListening) {
+                 recognition.start();
+                 lastTapTime = 0; // Reset
+                 // If double tap activated, we don't need to start the long press timer
+                 return;
+            }
+        }
+        lastTapTime = now;
+
+        // Start Long Press Timer
         timer = setTimeout(() => {
             if (recognition && !isListening) {
                  recognition.start();
-                 // Feedback is handled by recognition.onstart
             }
         }, holdDuration);
+    };
+
+    const handleTouchStart = () => {
+        ignoreMouse = true;
+        handleStart();
+        // Reset ignore flag after the typical click delay (300-400ms)
+        setTimeout(() => { ignoreMouse = false; }, 600);
+    };
+
+    const handleMouseDown = () => {
+        if (ignoreMouse) return;
+        handleStart();
     };
 
     const clearTimer = () => {
@@ -253,23 +281,23 @@ export const VoiceCommandButton: React.FC = () => {
     };
 
     // Attach listeners to window for global coverage
-    window.addEventListener('mousedown', startTimer);
-    window.addEventListener('touchstart', startTimer);
+    window.addEventListener('touchstart', handleTouchStart);
+    window.addEventListener('mousedown', handleMouseDown);
 
-    window.addEventListener('mouseup', clearTimer);
     window.addEventListener('touchend', clearTimer);
+    window.addEventListener('mouseup', clearTimer);
 
     // Clear on scroll/move to prevent triggering while scrolling
-    window.addEventListener('mousemove', clearTimer);
     window.addEventListener('touchmove', clearTimer);
+    window.addEventListener('mousemove', clearTimer);
 
     return () => {
-        window.removeEventListener('mousedown', startTimer);
-        window.removeEventListener('touchstart', startTimer);
-        window.removeEventListener('mouseup', clearTimer);
+        window.removeEventListener('touchstart', handleTouchStart);
+        window.removeEventListener('mousedown', handleMouseDown);
         window.removeEventListener('touchend', clearTimer);
-        window.removeEventListener('mousemove', clearTimer);
+        window.removeEventListener('mouseup', clearTimer);
         window.removeEventListener('touchmove', clearTimer);
+        window.removeEventListener('mousemove', clearTimer);
         if (timer) clearTimeout(timer);
     };
   }, [recognition, isListening]);
